@@ -1,0 +1,1 @@
+"""ECG training bot package."""
