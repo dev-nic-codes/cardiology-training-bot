@@ -29,6 +29,7 @@ from api.article_sources import (
     ArticleCandidate,
     build_article_sources,
     extract_background_from_html,
+    host_matches_domain,
     infer_pdf_url_from_article_url,
     limit_text,
     looks_like_navigation_noise,
@@ -462,7 +463,7 @@ class ArticlePostingService:
 
         for element in soup.select("[data-doi]"):
             doi = element.get("data-doi")
-            if doi and "ahajournals.org" in urlparse(base_url).netloc.lower():
+            if doi and host_matches_domain(urlparse(base_url).hostname, "ahajournals.org"):
                 add(f"/doi/pdf/{doi}?download=true")
                 add(f"/doi/epdf/{doi}")
 
@@ -482,7 +483,9 @@ class ArticlePostingService:
         for match in re.findall(r"/[^\s\"']*(?:pdf|pdfft|epdf|downloadpdf)[^\s\"']*", html_text, re.IGNORECASE):
             add(match)
 
-        if "download pdf" in text.casefold() and "ahajournals.org" in urlparse(base_url).netloc.lower():
+        if "download pdf" in text.casefold() and host_matches_domain(
+            urlparse(base_url).hostname, "ahajournals.org"
+        ):
             inferred = infer_pdf_url_from_article_url(base_url)
             if inferred:
                 add(inferred.replace("/doi/pdf/", "/doi/pdf/") + ("&download=true" if "?" in inferred else "?download=true"))
@@ -494,7 +497,7 @@ class ArticlePostingService:
         if parsed.scheme not in {"http", "https"}:
             return False
 
-        host = parsed.netloc.lower()
+        host = parsed.hostname
         if host in {
             "www.googletagmanager.com",
             "googletagmanager.com",
@@ -948,20 +951,20 @@ class ArticlePostingService:
 
         doi = self._extract_doi_from_url(normalized)
 
-        if "ahajournals.org" in host and doi:
+        if host_matches_domain(host, "ahajournals.org") and doi:
             add(f"{parsed.scheme}://{parsed.netloc}/doi/pdf/{doi}")
             add(f"{parsed.scheme}://{parsed.netloc}/doi/pdf/{doi}?download=true")
             add(f"{parsed.scheme}://{parsed.netloc}/doi/epdf/{doi}")
             add(f"{parsed.scheme}://{parsed.netloc}/doi/epdf/{doi}?download=true")
 
-        if "sciencedirect.com" in host and "/science/article/pii/" in path:
+        if host_matches_domain(host, "sciencedirect.com") and "/science/article/pii/" in path:
             pii = path.rstrip("/").split("/")[-1]
             article_base = f"{parsed.scheme}://{parsed.netloc}/science/article/pii/{pii}"
             add(f"{article_base}/pdfft?isDTMRedir=true&download=true")
             add(f"{article_base}/pdfft")
             add(f"{article_base}/pdf")
 
-        if "nature.com" in host and "/articles/" in path:
+        if host_matches_domain(host, "nature.com") and "/articles/" in path:
             article_base = f"{parsed.scheme}://{parsed.netloc}{path.removesuffix('.pdf')}"
             add(f"{article_base}.pdf")
             add(f"{article_base}?pdf=button%20sticky")
@@ -1046,15 +1049,15 @@ class ArticlePostingService:
 
     def _extract_doi_from_url(self, url: str) -> str | None:
         parsed = urlparse(url)
-        host = parsed.netloc.lower()
+        host = parsed.hostname
         path = parsed.path
 
-        if "academic.oup.com" in host:
+        if host_matches_domain(host, "academic.oup.com"):
             match = re.search(r"/doi/(10\.\d{4,9})/([^/]+)/([^/]+)/", path, re.IGNORECASE)
             if match:
                 return f"{match.group(1)}/{match.group(2)}/{match.group(3)}"
 
-        if "nature.com" in host and "/articles/" in path:
+        if host_matches_domain(host, "nature.com") and "/articles/" in path:
             article_code = path.rstrip("/").split("/")[-1].removesuffix(".pdf")
             if article_code.startswith("s"):
                 return f"10.1038/{article_code}"

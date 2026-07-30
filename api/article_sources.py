@@ -90,6 +90,15 @@ ARTICLE_RSS_SOURCES: tuple[tuple[str, str], ...] = (
 MEDSCAPE_CARDIOLOGY_URL = "https://www.medscape.com/cardiology"
 
 
+def host_matches_domain(host: str | None, domain: str) -> bool:
+    """Return whether *host* is *domain* or one of its subdomains."""
+    normalized_host = str(host or "").casefold().rstrip(".")
+    normalized_domain = str(domain or "").casefold().strip().rstrip(".")
+    if not normalized_host or not normalized_domain:
+        return False
+    return normalized_host == normalized_domain or normalized_host.endswith(f".{normalized_domain}")
+
+
 @dataclass(slots=True)
 class ArticleCandidate:
     unique_id: str
@@ -303,16 +312,16 @@ def extract_pdf_url_from_entry(entry: dict, article_url: str) -> str | None:
 
 def infer_pdf_url_from_article_url(article_url: str) -> str | None:
     parsed = urlparse(article_url)
-    host = parsed.netloc.lower()
+    host = parsed.hostname
     path = parsed.path
 
     if path.lower().endswith(".pdf"):
         return article_url
 
-    if "ahajournals.org" in host and "/doi/" in path:
+    if host_matches_domain(host, "ahajournals.org") and "/doi/" in path:
         return urlunparse((parsed.scheme, parsed.netloc, path.replace("/doi/abs/", "/doi/pdf/").replace("/doi/full/", "/doi/pdf/"), "", "", ""))
 
-    if "academic.oup.com" in host and "/advance-article/doi/" in path:
+    if host_matches_domain(host, "academic.oup.com") and "/advance-article/doi/" in path:
         parts = [part for part in path.split("/") if part]
         if len(parts) >= 7:
             journal = parts[0]
@@ -326,10 +335,10 @@ def infer_pdf_url_from_article_url(article_url: str) -> str | None:
             )
             return urlunparse((parsed.scheme, parsed.netloc, pdf_path, "", "", ""))
 
-    if "sciencedirect.com" in host and "/science/article/pii/" in path:
+    if host_matches_domain(host, "sciencedirect.com") and "/science/article/pii/" in path:
         return urlunparse((parsed.scheme, parsed.netloc, f"{path.rstrip('/')}/pdfft", "", "isDTMRedir=true&download=true", ""))
 
-    if "nature.com" in host and "/articles/" in path:
+    if host_matches_domain(host, "nature.com") and "/articles/" in path:
         article_path = path.removesuffix(".pdf")
         return urlunparse((parsed.scheme, parsed.netloc, f"{article_path}.pdf", "", "", ""))
 
