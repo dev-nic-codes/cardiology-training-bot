@@ -269,7 +269,7 @@ class ConsoleDashboard:
                 bold=True,
             ),
             self._paint(
-                f"Chat {self.settings.chat_id} | Owner {self.settings.owner_user_id or 'not set'}",
+                f"Chat {self.settings.chat_id} | Owner {self.settings.owner_user_id}",
                 ANSI_DIM,
             ),
             "",
