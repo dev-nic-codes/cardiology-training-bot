@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import html
 import logging
+import os
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -45,13 +47,9 @@ def build_commands_router(
     pending_inputs: dict[int, str] = {}
 
     def is_owner(message: Message) -> bool:
-        if settings.owner_user_id is None:
-            return True
         return bool(message.from_user and message.from_user.id == settings.owner_user_id)
 
     def is_owner_user(user_id: int | None) -> bool:
-        if settings.owner_user_id is None:
-            return True
         return user_id == settings.owner_user_id
 
     async def ensure_owner(message: Message) -> bool:
@@ -116,7 +114,30 @@ def build_commands_router(
                 updated.append(line)
         if not replaced:
             updated.append(rendered)
-        path.write_text("\n".join(updated).rstrip() + "\n", encoding="utf-8")
+        content = "\n".join(updated).rstrip() + "\n"
+        temp_path: str | None = None
+        try:
+            fd, temp_path = tempfile.mkstemp(prefix=".env.", suffix=".tmp", dir=path.parent, text=True)
+            with os.fdopen(fd, "w", encoding="utf-8") as file_handle:
+                file_handle.write(content)
+                file_handle.flush()
+                os.fsync(file_handle.fileno())
+            try:
+                os.chmod(temp_path, 0o600)
+            except OSError:
+                pass
+            os.replace(temp_path, path)
+            temp_path = None
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
+        finally:
+            if temp_path:
+                try:
+                    Path(temp_path).unlink()
+                except FileNotFoundError:
+                    pass
 
     def tail_logs(limit: int = 15) -> str:
         try:
@@ -521,14 +542,16 @@ def build_commands_router(
 
     @router.message(Command("next"))
     async def next_command(message: Message, bot: Bot) -> None:
+        if not await ensure_owner(message):
+            return
+
         LOGGER.info(
             "Received /next command. chat_id=%s message_thread_id=%s user_id=%s",
             message.chat.id,
             message.message_thread_id,
             message.from_user.id if message.from_user else None,
         )
-        if is_owner(message):
-            await sync_topic_from_message(message)
+        await sync_topic_from_message(message)
         try:
             await posting_service.post_next_case(bot)
         except Exception as exc:
@@ -586,6 +609,8 @@ def build_commands_router(
 
     @router.message(Command("stats"))
     async def stats_command(message: Message) -> None:
+        if not await ensure_owner(message):
+            return
         await message.answer(await overall_stats_text(), reply_markup=main_menu_keyboard())
 
     @router.message(Command("wrong"))

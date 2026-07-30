@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 from logging.handlers import RotatingFileHandler
 
 from aiogram import Bot, Dispatcher
@@ -26,6 +27,24 @@ from bot.services.stats_service import STATE_LAST_ECG_POSTED_AT, StatsService
 from bot.services.topic_manager import STATE_ARTICLES_TOPIC_ID, STATE_PODCAST_TOPIC_ID, TopicManager
 
 LOGGER = logging.getLogger(__name__)
+
+
+def startup_post_is_due(
+    last_posted_at: datetime | None,
+    interval_hours: int,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether a startup post is due without bypassing its interval."""
+    if last_posted_at is None:
+        return True
+    current = now or datetime.now(UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    previous = last_posted_at
+    if previous.tzinfo is None:
+        previous = previous.replace(tzinfo=UTC)
+    return current.astimezone(UTC) >= previous.astimezone(UTC) + timedelta(hours=interval_hours)
 
 
 def configure_logging(settings: Settings, event_buffer: DashboardEventBuffer) -> None:
@@ -217,43 +236,56 @@ async def main() -> None:
             )
         except Exception as exc:
             LOGGER.warning("Startup cache refresh failed. Continuing with existing cached ECG cases. error=%s", exc)
-        LOGGER.info("Startup: posting one ECG immediately.")
-        try:
-            ecg_result = await posting_service.post_next_case(bot)
-            LOGGER.info(
-                "Startup ECG posted successfully. case_id=%s poll_id=%s",
-                ecg_result.case_id,
-                ecg_result.poll_id,
-            )
-        except Exception:
-            LOGGER.exception("Startup ECG posting failed.")
+        last_ecg_posted_at = await state_store.get_datetime(STATE_LAST_ECG_POSTED_AT)
+        last_article_posted_at = await state_store.get_datetime(STATE_LAST_ARTICLE_POSTED_AT)
+        last_podcast_posted_at = await state_store.get_datetime(STATE_LAST_PODCAST_POSTED_AT)
 
-        LOGGER.info("Startup: posting one article immediately.")
-        try:
-            article_result = await article_posting_service.post_next_article(bot)
-            if article_result is None:
-                LOGGER.info("Startup article post skipped because no unseen article is available.")
-            else:
+        if startup_post_is_due(last_ecg_posted_at, settings.post_interval_hours):
+            LOGGER.info("Startup: ECG interval is due; posting one case.")
+            try:
+                ecg_result = await posting_service.post_next_case(bot)
                 LOGGER.info(
-                    "Startup article posted successfully. unique_id=%s pdf_attached=%s",
-                    article_result.unique_id,
-                    article_result.pdf_attached,
+                    "Startup ECG posted successfully. case_id=%s poll_id=%s",
+                    ecg_result.case_id,
+                    ecg_result.poll_id,
                 )
-        except Exception:
-            LOGGER.exception("Startup article posting failed.")
+            except Exception:
+                LOGGER.exception("Startup ECG posting failed.")
+        else:
+            LOGGER.info("Startup ECG post skipped because its interval is not due.")
 
-        LOGGER.info("Startup: posting one podcast immediately.")
-        try:
-            podcast_result = await podcast_posting_service.post_next_podcast(bot)
-            if podcast_result is None:
-                LOGGER.info("Startup podcast post skipped because no unseen episode is available.")
-            else:
-                LOGGER.info(
-                    "Startup podcast posted successfully. unique_id=%s",
-                    podcast_result.unique_id,
-                )
-        except Exception:
-            LOGGER.exception("Startup podcast posting failed.")
+        if startup_post_is_due(last_article_posted_at, settings.article_post_interval_hours):
+            LOGGER.info("Startup: article interval is due; posting one article.")
+            try:
+                article_result = await article_posting_service.post_next_article(bot)
+                if article_result is None:
+                    LOGGER.info("Startup article post skipped because no unseen article is available.")
+                else:
+                    LOGGER.info(
+                        "Startup article posted successfully. unique_id=%s pdf_attached=%s",
+                        article_result.unique_id,
+                        article_result.pdf_attached,
+                    )
+            except Exception:
+                LOGGER.exception("Startup article posting failed.")
+        else:
+            LOGGER.info("Startup article post skipped because its interval is not due.")
+
+        if startup_post_is_due(last_podcast_posted_at, settings.podcast_post_interval_hours):
+            LOGGER.info("Startup: podcast interval is due; posting one episode.")
+            try:
+                podcast_result = await podcast_posting_service.post_next_podcast(bot)
+                if podcast_result is None:
+                    LOGGER.info("Startup podcast post skipped because no unseen episode is available.")
+                else:
+                    LOGGER.info(
+                        "Startup podcast posted successfully. unique_id=%s",
+                        podcast_result.unique_id,
+                    )
+            except Exception:
+                LOGGER.exception("Startup podcast posting failed.")
+        else:
+            LOGGER.info("Startup podcast post skipped because its interval is not due.")
 
         last_ecg_posted_at = await state_store.get_datetime(STATE_LAST_ECG_POSTED_AT)
         last_article_posted_at = await state_store.get_datetime(STATE_LAST_ARTICLE_POSTED_AT)

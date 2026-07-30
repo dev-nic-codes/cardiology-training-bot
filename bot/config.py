@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     ecg_topic_id: int = Field(validation_alias="ECG_TOPIC_ID")
     articles_topic_id: int = Field(validation_alias="ARTICLES_TOPIC_ID")
     podcast_topic_id: int = Field(validation_alias="PODCAST_TOPIC_ID")
-    owner_user_id: int | None = Field(default=None, validation_alias="OWNER_USER_ID")
+    owner_user_id: int = Field(validation_alias="OWNER_USER_ID")
     database_url: str = Field(
         default=DEFAULT_DATABASE_URL,
         validation_alias="DATABASE_URL",
@@ -70,6 +70,13 @@ class Settings(BaseSettings):
         value = value.strip()
         if not value:
             raise ValueError("BOT_TOKEN is required.")
+        return value
+
+    @field_validator("owner_user_id")
+    @classmethod
+    def validate_owner_user_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("OWNER_USER_ID must be a positive Telegram user ID.")
         return value
 
     @field_validator("post_interval_hours")
@@ -137,16 +144,25 @@ class Settings(BaseSettings):
         return normalized
 
     def ensure_runtime_directories(self) -> None:
-        (BASE_DIR / "data").mkdir(exist_ok=True)
-        (BASE_DIR / "logs").mkdir(exist_ok=True)
-        (BASE_DIR / "downloads").mkdir(exist_ok=True)
+        for directory in (BASE_DIR / "data", BASE_DIR / "logs", BASE_DIR / "downloads"):
+            directory.mkdir(exist_ok=True)
+            try:
+                directory.chmod(0o700)
+            except OSError:
+                pass
 
         if self.database_url.startswith("sqlite"):
             parsed = urlparse(self.database_url)
             raw_path = unquote(parsed.path)
             if raw_path.startswith("/") and len(raw_path) > 3 and raw_path[2] == ":":
                 raw_path = raw_path[1:]
-            Path(raw_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+            database_parent = Path(raw_path).expanduser().resolve().parent
+            database_parent.mkdir(parents=True, exist_ok=True)
+            if database_parent != BASE_DIR and database_parent.is_relative_to(BASE_DIR):
+                try:
+                    database_parent.chmod(0o700)
+                except OSError:
+                    pass
 
     @property
     def logs_path(self) -> Path:

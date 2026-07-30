@@ -72,6 +72,11 @@ class ECGPostingService:
                 if refill_report.stored:
                     candidates = await self._load_candidate_cases(limit=MAX_ECG_POST_ATTEMPTS * 2)
 
+            if not candidates and await self.cache_service.count_total_cases() > 0:
+                LOGGER.info("All cached ECG cases have been used. Starting a new training cycle.")
+                await self.cache_service.reset_usage_cycle()
+                candidates = await self._load_candidate_cases(limit=MAX_ECG_POST_ATTEMPTS * 2)
+
             if not candidates:
                 raise RuntimeError("No unseen ECG cases are available to post.")
 
