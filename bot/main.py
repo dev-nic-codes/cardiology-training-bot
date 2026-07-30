@@ -72,7 +72,7 @@ async def main() -> None:
     settings = Settings()
     event_buffer = DashboardEventBuffer()
     configure_logging(settings, event_buffer)
-    LOGGER.info("Starting Private ECG Training Bot.")
+    LOGGER.info("Starting Cardiology Training Bot.")
     LOGGER.info(
         "Configuration loaded. chat_id=%s ecg_topic_id=%s articles_topic_id=%s podcast_topic_id=%s owner_user_id=%s ecg_interval=%s article_interval=%s podcast_interval=%s database=%s",
         settings.chat_id,

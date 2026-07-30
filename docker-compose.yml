@@ -1,7 +1,7 @@
 services:
-  ecg-training-bot:
+  cardiology-training-bot:
     build: .
-    container_name: ecg-training-bot
+    container_name: cardiology-training-bot
     restart: unless-stopped
     env_file:
       - .env

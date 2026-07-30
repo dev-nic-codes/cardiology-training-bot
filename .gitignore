@@ -11,6 +11,8 @@ __pycache__/
 .coverage
 htmlcov/
 node_modules/
+.idea/
+.vscode/
 backups/
 _archive/
 *.bak*

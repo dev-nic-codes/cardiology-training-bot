@@ -28,14 +28,14 @@ class Settings(BaseSettings):
     bot_token: str = Field(validation_alias="BOT_TOKEN")
     chat_id: int = Field(validation_alias="CHAT_ID")
     ecg_topic_id: int = Field(validation_alias="ECG_TOPIC_ID")
-    articles_topic_id: int = Field(default=197, validation_alias="ARTICLES_TOPIC_ID")
-    podcast_topic_id: int = Field(default=194, validation_alias="PODCAST_TOPIC_ID")
+    articles_topic_id: int = Field(validation_alias="ARTICLES_TOPIC_ID")
+    podcast_topic_id: int = Field(validation_alias="PODCAST_TOPIC_ID")
     owner_user_id: int | None = Field(default=None, validation_alias="OWNER_USER_ID")
     database_url: str = Field(
         default=DEFAULT_DATABASE_URL,
         validation_alias="DATABASE_URL",
     )
-    timezone: str = Field(default="Europe/Sofia", validation_alias="TIMEZONE")
+    timezone: str = Field(default="UTC", validation_alias="TIMEZONE")
     post_interval_hours: int = Field(default=3, validation_alias="POST_INTERVAL_HOURS")
     article_post_interval_hours: int = Field(default=2, validation_alias="ARTICLE_POST_INTERVAL_HOURS")
     podcast_post_interval_hours: int = Field(default=168, validation_alias="PODCAST_POST_INTERVAL_HOURS")
